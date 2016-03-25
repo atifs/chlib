@@ -151,6 +151,7 @@ class Group(object):
 			self.mods = list()
 			self.owner = None
 			self.blist = list()
+			self.nomore = False # Change to 'True' to only load recent posts on join. Posts that are not loaded will not be added to pArray, and cannot be deleted directly
 		else: #PM variables
 			self.nColor = "000"
 			self.pmAuth = None
@@ -401,7 +402,21 @@ class Digest(object):
 		group.sendCmd("g_participants", "start")
 		group.sendCmd("getbannedwords")
 		group.sendCmd("getratelimit")
+		if group.nomore == False:
+			group.sendCmd("get_more", "50", "0")
 		self.call(bites[0], group)
+
+	def nomore(self, group, bites):
+		group.nomore = True
+		self.call(bites[0], group)
+
+	def gotmore(self, group, bites):
+		self.call(bites[0], group)
+		time.sleep(1)
+		if group.nomore == False:
+			group.sendCmd("get_more", "50", str(int(bites[1])+1))
+
+
 
 	def premium(self, group, bites):
 		if int(bites[2]) > time.time():
@@ -487,6 +502,20 @@ class Digest(object):
 					args = post.post.split()[1:]
 					self.call("Command", group, user, auth, post, cmd, args)
 
+	def i(self, group, bites):
+		tag = re.search("(<n([a-fA-F0-9]{1}|[a-fA-F0-9]{3}|[a-fA-F0-9]{4}|[a-fA-F0-9]{6})\/>)?(<f x([\d]{0}|[\d]{2})([0-9a-fA-F]{1}|[0-9a-fA-F]{3}|[0-9a-fA-F]{6})=\"([0-9a-zA-Z]*)\">)?", bites[10])
+		if tag:
+			nColor = tag.group(1) or ""
+			fSize = tag.group(2) or ""
+			fColor = tag.group(3) or ""
+			fFace = tag.group(4) or "0"
+		else:
+			nColor = ""
+			fSize = ""
+			fColor = ""
+			fFace = "0"
+		group.pArray[bites[6]] = type("Post", (object,), {"group": group, "time": bites[1], "user": bites[2].lower() if bites[2] != '' else "#" + bites[3] if bites[3] != '' else "!anon" + Generate.aid(nColor, bites[4]) if nColor else "!anon" , "uid": bites[4], "unid": bites[5], "pid": bites[6], "ip": bites[7], "post": re.sub("<(.*?)>", "", ":".join(bites[10:])).replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&apos;", "'").replace("&#39;", "'").replace("&amp;", "&"), "nColor": nColor, "fSize": fSize, "fFace": fFace, "fColor": fColor})
+
 	def n(self, group, bites):
 		group.unum = bites[1]
 
@@ -510,13 +539,19 @@ class Digest(object):
 		for pid in bites[1:]:
 			deleted = group.getLastPost(pid, "pid")
 			if deleted:
-				del group.pArray[deleted.pnum]
+				if hasattr(deleted, "pnum"):
+					del group.pArray[deleted.pnum]
+				else:
+					del group.pArray[deleted.pid]
 				self.call(bites[0], group, deleted)
 
 	def delete(self, group, bites):
 		deleted = group.getLastPost(bites[1], "pid")
 		if deleted:
-			del group.pArray[deleted.pnum]
+			if hasattr(deleted, "pnum"):
+				del group.pArray[deleted.pnum]
+			else:
+				del group.pArray[deleted.pid]
 			self.call(bites[0], group, deleted)
 
 	def blocked(self, group, bites):
