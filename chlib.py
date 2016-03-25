@@ -219,6 +219,7 @@ class Group(object):
 
 	def sendCmd(self, *args, firstcmd = False):
 		'''Send data to socket'''
+		args = [str(i) for i in args]
 		if not firstcmd:
 			self.wqueue.put_nowait(bytes(':'.join(args)+"\r\n\x00", "utf-8"))
 		else:
@@ -665,7 +666,7 @@ class ConnectionManager(object):
 
 	def sendCmd(self, *args):
 		'''Send data to socket'''
-		self.getGroup(self.user).wqueue.put_nowait(bytes(':'.join(args)+"\r\n\x00", "utf-8"))
+		self.getGroup(self.user).wqueue.put_nowait(bytes(':'.join([str(i) for i in args])+"\r\n\x00", "utf-8"))
 
 	def manage(self, group, data):
 		buffer = data.split(b"\x00")
