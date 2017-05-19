@@ -146,7 +146,7 @@ class Group(object):
 			self.unum = None
 			self.pArray = {}
 			self.uArray = {}
-			self.auth = None
+			self.auth = 0
 			self.users = list()
 			self.bw = list()
 			self.mods = list()
@@ -245,41 +245,42 @@ class Group(object):
 		if user and password:
 			self.sendCmd("blogin", user, password) #user
 			self.user = user
-			self.auth = self.getAuth(self.user)
 		elif user:
 			self.user = "#" + user
+			self.auth = 0
 			self.sendCmd("blogin", user) #temporary user
 		else:
+			self.auth = 0
 			self.sendCmd("blogin")
 
 	def logout(self):
 		'''Log's out of an account'''
 		self.sendCmd("blogout")
-
+		return True
 	def enableBg(self):
 		'''Enables background'''
 		self.sendCmd("getpremium", "1")
-
+		return True
 	def disableBg(self):
 		'''Disables background'''
 		self.sendCmd("msgbg", "0")
-
+		return True
 	def enableVr(self):
 		'''Enable group's VR on each post'''
 		self.sendCmd("msgmedia", "1")
-
+		return True
 	def disableVr(self):
 		'''Disable group's VR on each post'''
 		self.sendCmd("msgmedia", "0")
-
+		return True
 	def setNameColor(self, nColor):
 		'''Set's a user's name color'''
 		self.nColor = nColor
-
+		return True
 	def setFontColor(self, fColor):
 		'''Set's a user's font color'''
 		self.fColor = fColor
-
+		return True
 	def setFontSize(self, fSize):
 		'''Set's a user's font size'''
 		fSize = str(fSize)
@@ -287,11 +288,13 @@ class Group(object):
 			if len(fSize) == 1:
 				fSize = "0"+fSize
 			self.fSize = fSize
-
+			return True
+		else:
+			return False
 	def setFontFace(self, fFace):
 		'''Set's a user's font face'''
 		self.fFace = fFace
-
+		return True
 	def getAuth(self, user):
 		'''return the users group level 2 = owner 1 = mod 0 = user'''
 		if user == self.owner:
@@ -311,10 +314,14 @@ class Group(object):
 
 	def dlPost(self, post):
 		'''delete a user's post'''
+		if self.auth < 1:
+			return False
 		self.sendCmd("delmsg", post.pid)
-
+		return True
 	def dlUser(self, user):
 		'''Delete all of a user's posts'''
+		if self.auth < 1:
+			return False
 		post = self.getLastPost(user)
 		unid = None
 		if post:
@@ -324,9 +331,13 @@ class Group(object):
 				self.sendCmd("delallmsg", unid, post.ip, "")
 			else:
 				self.sendCmd("delallmsg", unid, post.ip, post.user)
-
+			return True
+		else:
+			return False
 	def ban(self, user):
 		'''Ban a user'''
+		if self.auth < 1:
+			return False
 		unid = None
 		ip = None
 		try:
@@ -339,12 +350,16 @@ class Group(object):
 				self.sendCmd("block", unid, ip, "")
 			else:
 				self.sendCmd("block", unid, ip, user)
+		else:
+			return False
 		self.getBanList()
+		return True
 
 	def flag(self, user):
 		'''Flag a user'''
 		pid = self.getLastPost(user).pid
 		self.sendCmd("g_flag", pid)
+		return True
 
 	def unban(self, user):
 		'''Unban a user'''
@@ -352,25 +367,37 @@ class Group(object):
 		if banned:
 			self.sendCmd("removeblock", banned[0].unid, banned[0].ip, banned[0].user)
 			self.getBanList()
+			return True
+		else:
+			return False
 
 	def setMod(self, mod):
 		'''Add's a group moderator'''
+		if self.auth < 2:
+			return False
 		self.sendCmd("addmod", mod)
-
+		return True
 	def eraseMod(self, mod):
 		'''Removes a group moderator'''
+		if self.auth < 2:
+			return False
 		self.sendCmd("removemod", mod)
+		return True
 
 	def clearGroup(self):
 		'''Deletes all messages'''
-		if self.user == self.owner:
+		if self.auth == 2:
 			self.sendCmd("clearall")
-		else: #;D
+			return True
+		else: #This spams chatango use sparely
+			if self.auth < 1:
+				return False
 			pArray = self.pArray.values()
 			for user in list(set([x.user for x in pArray])):
 				post = self.getLastPost(user)
 				if post and hasattr(post, "unid"):
 					self.dlUser(user)
+			return True
 
 class Digest(object):
 
@@ -398,6 +425,7 @@ class Digest(object):
 			group.ip = bites[6]
 			group.mods = [x.split(',')[0] for x in bites[7].split(';')]
 			group.mods.sort()
+			group.auth = group.getAuth(group.user)
 
 	def inited(self, group, bites):
 		group.sendCmd("blocklist", "block", "", "next", "500")
@@ -535,8 +563,8 @@ class Digest(object):
 			group.mods.append(mod)
 			group.mods.sort()
 			modded = True
+		group.auth = group.getAuth(group.user)
 		self.call(bites[0], group, modded, mod)
-
 	def deleteall(self, group, bites):
 		for pid in bites[1:]:
 			deleted = group.getLastPost(pid, "pid")
@@ -580,8 +608,19 @@ class Digest(object):
 			else:
 				self.call(bites[0], group, "Non-member", bites[4])
 
+	def badlogin(self, group, bites):
+		failedUser = group.user
+		group.user = "!anon" + Generate.aid(group.nColor, group.uid)
+		group.auth = 0
+		self.call(bites[0], group, group.user)
+
+	def pwdok(self, group, bites):
+		group.auth = group.getAuth(group.user)
+		self.call(bites[0], group, group.user)
+
 	def logoutok(self, group, bites):
-		self.manager.user = "!anon" + Generate.aid(group.nColor, group.uid)
+		group.user = "!anon" + Generate.aid(group.nColor, group.uid)
+		group.auth = 0
 
 	def clearall(self, group, bites):
 		if bites[1] == "ok":
