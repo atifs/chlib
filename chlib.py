@@ -145,6 +145,7 @@ class Group(object):
 			self.limited = 0
 			self.unum = None
 			self.pArray = {}
+			self.pidDict = {}
 			self.uArray = {}
 			self.auth = 0
 			self.users = list()
@@ -517,7 +518,15 @@ class Digest(object):
 			fSize = ""
 			fColor = ""
 			fFace = "0"
-		group.pArray[bites[6]] = type("Post", (object,), {"group": group, "time": bites[1], "user": bites[2].lower() if bites[2] != '' else "#" + bites[3] if bites[3] != '' else "!anon" + Generate.aid(nColor, bites[4]) if nColor else "!anon" , "uid": bites[4], "unid": bites[5], "pnum": bites[6], "ip": bites[7], "post": re.sub("<(.*?)>", "", ":".join(bites[10:])).replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&apos;", "'").replace("&#39;", "'").replace("&amp;", "&"), "nColor": nColor, "fSize": fSize, "fFace": fFace, "fColor": fColor})
+		pid = None if bites[6] not in group.pidDict else group.pidDict.pop(bites[6])
+		group.pArray[bites[6]] = type("Post", (object,), {"group": group, "time": bites[1], "user": bites[2].lower() if bites[2] != '' else "#" + bites[3] if bites[3] != '' else "!anon" + Generate.aid(nColor, bites[4]) if nColor else "!anon" , "uid": bites[4], "unid": bites[5], "pnum": bites[6], "pid": pid, "ip": bites[7], "post": re.sub("<(.*?)>", "", ":".join(bites[10:])).replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&apos;", "'").replace("&#39;", "'").replace("&amp;", "&"), "nColor": nColor, "fSize": fSize, "fFace": fFace, "fColor": fColor})
+		if pid:
+			self.call("Post", group, user, post)
+			if post.post[0] == self.manager.prefix:
+				auth = group.getAuth(post.user)
+				cmd = post.post.split()[0][1:].lower()
+				args = post.post.split()[1:]
+				self.call("Command", group, user, auth, post, cmd, args)
 
 	def u(self, group, bites):
 		post = group.pArray[bites[1]] if group.pArray.get(bites[1]) else None
@@ -531,6 +540,8 @@ class Digest(object):
 					cmd = post.post.split()[0][1:].lower()
 					args = post.post.split()[1:]
 					self.call("Command", group, user, auth, post, cmd, args)
+		else:
+			group.pidDict[bites[1]] = bites[2]
 
 	def i(self, group, bites):
 		tag = re.search("(<n([a-fA-F0-9]{1}|[a-fA-F0-9]{3}|[a-fA-F0-9]{4}|[a-fA-F0-9]{6})\/>)?(<f x([\d]{0}|[\d]{2})([0-9a-fA-F]{1}|[0-9a-fA-F]{3}|[0-9a-fA-F]{6})=\"([0-9a-zA-Z]*)\">)?", bites[10])
